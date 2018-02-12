@@ -18,10 +18,26 @@ package androidx.content
 
 import android.content.Context
 import android.content.res.TypedArray
+import android.graphics.Bitmap
+import android.graphics.Point
+import android.net.Uri
+import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.support.annotation.AttrRes
+import android.support.annotation.LayoutRes
 import android.support.annotation.RequiresApi
 import android.support.annotation.StyleRes
 import android.util.AttributeSet
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import java.io.File
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
+import java.io.IOException
+import java.net.MalformedURLException
+import java.nio.charset.Charset
 
 /**
  * Return the handle to a system-level service by class.
@@ -91,3 +107,120 @@ inline fun Context.withStyledAttributes(
         typedArray.recycle()
     }
 }
+
+/**
+ * Screen aspect ration
+ */
+val Context.screenAspectRatio: Float
+    get() {
+        val point = screenPointDimens
+        return point.x.toFloat() / point.y.toFloat()
+    }
+
+/**
+ * Screen [Point] dimens
+ */
+val Context.screenPointDimens: Point
+    get() {
+        val point = Point()
+        (getSystemService(Context.WINDOW_SERVICE) as WindowManager).defaultDisplay
+            .getSize(point)
+        return point
+    }
+
+/**
+ * Return string asset for given [path] and [charset]
+ *
+ * Throws [IOException]
+ */
+@Throws(IOException::class)
+fun Context.getStringAsset(path: String, charset: String = "UTF-8"): String? {
+    val inputStream = javaClass.classLoader.getResourceAsStream("assets/" + path)
+    val size = inputStream.available()
+    val buffer = ByteArray(size)
+    inputStream.read(buffer)
+    inputStream.close()
+    return String(buffer, Charset.forName(charset))
+}
+
+/**
+ * Creates temp file from given bitmap. All exception are caught - returns null in case of exception
+ */
+fun Context.createTempFileFromBitmap(
+    image: Bitmap,
+    fileName: String = "image_${System.currentTimeMillis()}.jpg"
+): Uri? {
+    try {
+        val fileTemp = File(externalCacheDir, fileName)
+        fileTemp.createNewFile()
+        val fos = FileOutputStream(fileTemp)
+        image.compress(Bitmap.CompressFormat.JPEG, 90, fos)
+        fos.close()
+        return Uri.fromFile(fileTemp)
+    } catch (e: FileNotFoundException) {
+        e.printStackTrace()
+        return null
+    } catch (e: MalformedURLException) {
+        e.printStackTrace()
+        return null
+    } catch (e: IOException) {
+        e.printStackTrace()
+        return null
+    }
+}
+
+/**
+ * Creates bitmap from Uri of image file
+ *
+ * Throws [FileNotFoundException] and [IOException]
+ */
+@Throws(FileNotFoundException::class, IOException::class)
+fun Context.getBitmapFromFile(file: Uri) = MediaStore.Images.Media.getBitmap(contentResolver, file)
+
+/**
+ * Converts content [contentUri] [Uri] to file [Uri]
+ *
+ * Throws [IOException]
+ */
+@RequiresApi(19)
+@Throws(IOException::class)
+fun Context.contentUriToFileUri(contentUri: Uri): Uri {
+
+    val id =
+        DocumentsContract.getDocumentId(contentUri).split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[1]
+    val column = arrayOf(MediaStore.Images.Media.DATA)
+    val sel = "${MediaStore.Images.Media._ID}=?"
+
+    val cursor = contentResolver.query(
+        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+        column, sel, arrayOf(id), null
+    )
+
+    var filePath = ""
+
+    if (cursor.moveToFirst()) {
+        filePath = cursor.getString(cursor.getColumnIndex(column[0]))
+    }
+    cursor.close()
+
+    return Uri.parse(filePath)
+}
+
+/**
+ * Gets mime type of given [uri]
+ *
+ * Throws [IOException]
+ */
+@Throws(IOException::class)
+fun Context.mimeType(uri: Uri): String = contentResolver.getType(uri)
+
+/**
+ * Inflates view for given [layout]
+ *
+ * Throws [IOException]
+ */
+fun Context.inflateView(
+    @LayoutRes layout: Int, root: ViewGroup? = null,
+    attachToRoot: Boolean = false
+): View =
+    LayoutInflater.from(this).inflate(layout, root, attachToRoot)
