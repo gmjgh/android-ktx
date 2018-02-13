@@ -19,7 +19,9 @@ package androidx.content
 import android.content.Context
 import android.content.res.TypedArray
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Point
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.MediaStore
@@ -32,10 +34,12 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
+import androidx.graphics.drawable.toBitmap
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.FileOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.net.MalformedURLException
 import java.nio.charset.Charset
 
@@ -109,15 +113,6 @@ inline fun Context.withStyledAttributes(
 }
 
 /**
- * Screen aspect ration
- */
-val Context.screenAspectRatio: Float
-    get() {
-        val point = screenPointDimens
-        return point.x.toFloat() / point.y.toFloat()
-    }
-
-/**
  * Screen [Point] dimens
  */
 val Context.screenPointDimens: Point
@@ -129,13 +124,22 @@ val Context.screenPointDimens: Point
     }
 
 /**
+ * Screen aspect ration
+ */
+val Context.screenAspectRatio: Float
+    get() {
+        val point = screenPointDimens
+        return point.x.toFloat() / point.y.toFloat()
+    }
+
+/**
  * Return string asset for given [path] and [charset]
  *
  * Throws [IOException]
  */
 @Throws(IOException::class)
 fun Context.getStringAsset(path: String, charset: String = "UTF-8"): String? {
-    val inputStream = javaClass.classLoader.getResourceAsStream("assets/" + path)
+    val inputStream = javaClass.classLoader.getResourceAsStream("assets/$path")
     val size = inputStream.available()
     val buffer = ByteArray(size)
     inputStream.read(buffer)
@@ -144,19 +148,35 @@ fun Context.getStringAsset(path: String, charset: String = "UTF-8"): String? {
 }
 
 /**
+ * Return image asset for given [path] and [charset] like [Bitmap]
+ */
+fun Context.getImageAssetAsBitmap(path: String): Bitmap?{
+    val ims = javaClass.classLoader.getResourceAsStream("assets/$path")
+    return BitmapFactory.decodeStream(ims)
+}
+
+/**
+ * Return image asset for given [path] and [charset] like [Drawable]
+ */
+fun Context.getImageAssetAsDrawable(path: String): Drawable?{
+    val ims = javaClass.classLoader.getResourceAsStream("assets/$path")
+    return Drawable.createFromStream(ims, path)
+}
+
+/**
  * Creates temp file from given bitmap. All exception are caught - returns null in case of exception
  */
 fun Context.createTempFileFromBitmap(
-    image: Bitmap,
+    image: Bitmap?,
     fileName: String = "image_${System.currentTimeMillis()}.jpg"
-): Uri? {
+): File? {
     try {
         val fileTemp = File(externalCacheDir, fileName)
         fileTemp.createNewFile()
         val fos = FileOutputStream(fileTemp)
-        image.compress(Bitmap.CompressFormat.JPEG, 90, fos)
+        image?.compress(Bitmap.CompressFormat.JPEG, 90, fos)
         fos.close()
-        return Uri.fromFile(fileTemp)
+        return fileTemp
     } catch (e: FileNotFoundException) {
         e.printStackTrace()
         return null
@@ -174,45 +194,9 @@ fun Context.createTempFileFromBitmap(
  *
  * Throws [FileNotFoundException] and [IOException]
  */
+@Suppress("HasPlatformType")
 @Throws(FileNotFoundException::class, IOException::class)
-fun Context.getBitmapFromFile(file: Uri) = MediaStore.Images.Media.getBitmap(contentResolver, file)
-
-/**
- * Converts content [contentUri] [Uri] to file [Uri]
- *
- * Throws [IOException]
- */
-@RequiresApi(19)
-@Throws(IOException::class)
-fun Context.contentUriToFileUri(contentUri: Uri): Uri {
-
-    val id =
-        DocumentsContract.getDocumentId(contentUri).split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()[1]
-    val column = arrayOf(MediaStore.Images.Media.DATA)
-    val sel = "${MediaStore.Images.Media._ID}=?"
-
-    val cursor = contentResolver.query(
-        MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-        column, sel, arrayOf(id), null
-    )
-
-    var filePath = ""
-
-    if (cursor.moveToFirst()) {
-        filePath = cursor.getString(cursor.getColumnIndex(column[0]))
-    }
-    cursor.close()
-
-    return Uri.parse(filePath)
-}
-
-/**
- * Gets mime type of given [uri]
- *
- * Throws [IOException]
- */
-@Throws(IOException::class)
-fun Context.mimeType(uri: Uri): String = contentResolver.getType(uri)
+fun Context.createBitmapFromFile(file: Uri) = MediaStore.Images.Media.getBitmap(contentResolver, file)
 
 /**
  * Inflates view for given [layout]
