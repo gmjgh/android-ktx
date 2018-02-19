@@ -19,6 +19,7 @@ package androidx.content
 import android.support.test.InstrumentationRegistry
 import android.support.test.filters.SdkSuppress
 import android.test.mock.MockContext
+import android.view.LayoutInflater
 import androidx.getAttributeSet
 import androidx.kotlin.test.R
 import org.junit.Assert.assertEquals
@@ -69,5 +70,12 @@ class ContextTest {
         context.withStyledAttributes(attrs, R.styleable.SampleAttrs, 0, 0) {
             assertTrue(getInt(R.styleable.SampleAttrs_sample, -1) != -1)
         }
+    }
+
+    @Test
+    fun testInflateView() {
+        val view = LayoutInflater.from(context).inflate(R.layout.test_activity, null, false)
+        val testView = context.inflate(R.layout.test_activity)
+        assertEquals(view.drawableState, testView.drawableState)
     }
 }
